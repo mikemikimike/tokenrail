@@ -88,6 +88,8 @@ def test_explicit_prices_win_preserve_wire_and_save_provenance(api, tmp_path):
     ('abcgpt-6-lunaxyz', 'decisions.create', None),
     ('gpt-6-sol_gpt-6-luna', 'decisions.create', 'gpt-6-luna'),
     ('gpt-5.4-mini_gpt-5.4-nano', 'responses.create', None),
+    ('gpt-5.9', 'responses.create', None),
+    ('prod-gpt-5.9', 'responses.create', None),
     ('gpt-4o-mini', 'decisions.create', None),
     ('unknown', 'responses.create', None),
 ])
@@ -101,6 +103,17 @@ def test_longest_delimited_match_ambiguity_and_api_support(model, api, matched):
     else:
         assert result.cost.pricing['matched_model'] == matched
         assert result.cost.pricing['source'] == 'openai_catalog'
+
+
+def test_registered_decimal_model_keeps_exact_pricing():
+    calls = []
+    with sdk(calls, endpoint='https://api.openai.com/v1/') as client, warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter('always')
+        result = call(RailClient.openai(client=client), 'responses.create', 'gpt-5.5')
+    assert calls[0][1]['model'] == 'gpt-5.5'
+    assert result.cost is not None
+    assert result.cost.pricing['matched_model'] == 'gpt-5.5'
+    assert not caught
 
 
 def test_api_prices_are_separate_and_warnings_once_per_client_model_operation():

@@ -517,7 +517,7 @@ class OpenAIProviderTests(unittest.TestCase):
         message = str(caught[0].message)
         self.assertIn("Model 'gpt-5.7-once-only' is not explicitly registered", message)
         self.assertIn("capabilities from 'gpt-5'", message)
-        self.assertIn("pricing from 'gpt-5'", message)
+        self.assertIn("pricing from no pricing entry (cost=None)", message)
 
     def test_unknown_model_warning_explains_missing_pricing(self):
         model = "brand-new-model-without-catalog-entry"

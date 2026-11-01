@@ -207,22 +207,34 @@ _WARNED_FALLBACK_MODELS: set[str] = set()
 _WARNING_LOCK = threading.Lock()
 
 
-def _is_delimited_match(model: str, candidate: str, start: int, end: int) -> bool:
+def _is_delimited_match(
+    model: str, candidate: str, start: int, end: int, *, reject_numeric_dot_continuation: bool = False
+) -> bool:
     before = model[start - 1] if start > 0 else None
     after = model[end] if end < len(model) else None
+    # A dot followed by a digit continues a model version, not a delimiter.
+    if reject_numeric_dot_continuation and after == "." and end + 1 < len(model) and model[end + 1].isdigit():
+        return False
     before_ok = before is None or before in _MODEL_NAME_DELIMITERS
     after_ok = after is None or after in _MODEL_NAME_DELIMITERS
     return before_ok and after_ok
 
 
-def _match_rule(model: str, rules: Iterable[tuple[tuple[str, ...], _T]]) -> tuple[str, _T] | None:
+def _match_rule(
+    model: str,
+    rules: Iterable[tuple[tuple[str, ...], _T]],
+    *,
+    reject_numeric_dot_continuation: bool = False,
+) -> tuple[str, _T] | None:
     matches: list[tuple[int, int, str, _T]] = []
     for rule_index, (prefixes, payload) in enumerate(rules):
         for prefix in prefixes:
             start = model.find(prefix)
             while start != -1:
                 end = start + len(prefix)
-                if _is_delimited_match(model, prefix, start, end):
+                if _is_delimited_match(
+                    model, prefix, start, end, reject_numeric_dot_continuation=reject_numeric_dot_continuation
+                ):
                     matches.append((len(prefix), rule_index, prefix, payload))
                     break
                 start = model.find(prefix, start + 1)
@@ -271,7 +283,7 @@ def _resolve_model_catalog(
     model: str,
 ) -> tuple[tuple[str, ModelCapabilities] | None, tuple[str, ModelPricing] | None]:
     capability_match = _match_rule(model, _CAPABILITY_RULES)
-    pricing_match = _match_rule(model, _PRICING_RULES)
+    pricing_match = _match_rule(model, _PRICING_RULES, reject_numeric_dot_continuation=True)
     _warn_for_catalog_fallback(model, capability_match, pricing_match)
     return capability_match, pricing_match
 
@@ -296,7 +308,7 @@ def _infer_pricing_model(model: str) -> tuple[str, ModelPricing] | None:
     matches = []
     for names, pricing in _PRICING_RULES:
         for name in names:
-            if _match_rule(model, [((name,), pricing)]) is not None:
+            if _match_rule(model, [((name,), pricing)], reject_numeric_dot_continuation=True) is not None:
                 matches.append((name, pricing))
     if not matches:
         return None
